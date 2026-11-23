@@ -1,0 +1,10 @@
+build/
+out/
+cmake-build-*/
+.vs/
+.vscode/
+*.user
+
+# Dépendances binaires et modèles (volumineux)
+third_party/vosk/
+models/
