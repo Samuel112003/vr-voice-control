@@ -6,6 +6,7 @@
 #include "voicecontrol/speech_recognizer.hpp"
 #include "voicecontrol/vocabulary.hpp"
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -14,6 +15,13 @@
 #include <vector>
 
 namespace vc {
+
+/// État de l'écoute (bouton on/off du contrôle vocal).
+enum class ListeningState {
+    Active,       // tout est exécuté
+    SoftPaused,   // veille : rien n'est exécuté jusqu'au terme de réveil
+    Paused,       // pause : tout est ignoré jusqu'à resume() (action non vocale)
+};
 
 /// Point d'entrée de la bibliothèque pour l'application hôte.
 ///
@@ -50,6 +58,29 @@ public:
     /// Analyseur (réglage du délai d'attente des ordres incomplets, horloge de test...).
     CommandParser& parser() { return parser_; }
 
+    // --- Pause / veille ------------------------------------------------------
+    // Ces méthodes peuvent être appelées depuis n'importe quel thread (bouton de
+    // l'interface pendant que listen() tourne ailleurs), ou depuis une action.
+    // Entrer en pause ou en veille oublie la phrase en cours et l'ordre en
+    // attente ; les acteurs visés sont conservés.
+
+    /// Vraie pause : l'audio et le texte sont ignorés jusqu'à resume().
+    void pause();
+
+    /// Veille : la reconnaissance continue, mais rien n'est exécuté jusqu'à ce
+    /// qu'une forme de `wakeTerm` soit entendue. La suite de cette phrase est
+    /// alors exécutée normalement. `wakeTerm` doit appartenir au vocabulaire
+    /// (pour être dans la grammaire du moteur).
+    void softPause(const Term& wakeTerm);
+
+    /// Reprend l'écoute (depuis la pause ou la veille).
+    void resume();
+
+    ListeningState listeningState() const { return state_.load(); }
+
+    /// Appelé à chaque changement d'état (sur le thread qui l'a provoqué).
+    void onListeningChanged(std::function<void(ListeningState)> callback) { listeningChanged_ = std::move(callback); }
+
     /// Branche un moteur de reconnaissance. Sa grammaire est mise à jour
     /// avec les expressions du vocabulaire courant.
     void setRecognizer(std::unique_ptr<ISpeechRecognizer> recognizer);
@@ -77,6 +108,14 @@ public:
 
 private:
     std::vector<Command> handleRecognized();
+    void setState(ListeningState state);
+    /// Applique, sur le thread de l'audio, l'oubli demandé par pause()/softPause().
+    void applyReset();
+
+    std::atomic<ListeningState> state_{ListeningState::Active};
+    std::atomic<const Term*> wakeTerm_{nullptr};
+    std::atomic<bool> resetRequested_{false};
+    std::function<void(ListeningState)> listeningChanged_;
 
     Vocabulary vocabulary_;
     CommandParser parser_;

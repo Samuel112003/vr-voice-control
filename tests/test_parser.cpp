@@ -9,6 +9,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 static int failures = 0;
@@ -260,6 +261,72 @@ static void testConsumedActors() {
     CHECK(!s.ctrl.parser().hasPending());
 }
 
+static void testListening() {
+    using State = vc::ListeningState;
+    Scene s;
+    auto& v = s.ctrl.vocabulary();
+    std::vector<State> changes;
+    s.ctrl.onListeningChanged([&](State st) { changes.push_back(st); });
+    auto& reprends = v.term({"reprends", "reprise", "reprends l'écoute"});
+    auto& pauseTerm = v.term({"pause", "mets en pause"});
+    v.order({pauseTerm}, [&](const vc::Arguments&) { s.ctrl.softPause(reprends); });
+    auto state = [&] { return s.ctrl.listeningState(); };
+
+    // Vraie pause : tout est ignoré, même le terme de réveil ; les cibles sont conservées
+    CHECK((s.say("drone deux avance") == Log{"drone 2:avance"}));
+    s.ctrl.pause();
+    CHECK(state() == State::Paused);
+    CHECK(s.say("drone un avance").empty());
+    CHECK(s.say("reprends avance").empty() && state() == State::Paused);
+    s.ctrl.resume();
+    CHECK((s.say("avance") == Log{"drone 2:avance"}));
+
+    // La pause oublie l'ordre en attente
+    s.say("drone un tire sur");
+    s.ctrl.pause();
+    s.ctrl.resume();
+    CHECK(s.say("drone deux").empty() && s.ctrl.targets()[0]->name() == "drone 2");
+
+    // Veille déclenchée par la voix : la suite de la phrase n'est pas exécutée
+    CHECK(s.say("pause drone un avance").empty() && state() == State::SoftPaused);
+    CHECK(s.say("drone un avance").empty());
+    // Terme de réveil : l'écoute reprend, la suite de la phrase est exécutée
+    CHECK((s.say("euh reprends drone un avance") == Log{"drone 1:avance"}) && state() == State::Active);
+    // Formes à plusieurs mots ; la plus longue l'emporte
+    s.say("mets en pause");
+    CHECK(s.say("reprends l'écoute").empty() && state() == State::Active);
+    // Vraie pause pendant la veille : le terme de réveil ne suffit plus
+    s.say("pause");
+    s.ctrl.pause();
+    CHECK(s.say("reprends").empty() && state() == State::Paused);
+    s.ctrl.resume();
+
+    CHECK((changes == std::vector<State>{State::Paused, State::Active, State::Paused, State::Active,
+                                         State::SoftPaused, State::Active, State::SoftPaused, State::Active,
+                                         State::SoftPaused, State::Paused, State::Active}));
+
+    // Audio : jeté pendant la pause ; la phrase en cours est oubliée (reset du moteur)
+    struct CountingRecognizer : vc::ISpeechRecognizer {
+        int* accepted;
+        int* resets;
+        CountingRecognizer(int* a, int* r) : accepted(a), resets(r) {}
+        void setGrammar(const std::vector<std::string>&) override {}
+        bool acceptAudio(const std::int16_t*, std::size_t) override { return ++*accepted, false; }
+        std::string takeResult() override { return {}; }
+        void reset() override { ++*resets; }
+    };
+    int accepted = 0, resets = 0;
+    s.ctrl.setRecognizer(std::make_unique<CountingRecognizer>(&accepted, &resets));
+    std::int16_t audio[4] = {};
+    s.ctrl.feedAudio(audio, 4);
+    std::thread([&] { s.ctrl.pause(); }).join();   // bouton sur un autre thread
+    s.ctrl.feedAudio(audio, 4);
+    CHECK(accepted == 1 && resets == 1);
+    s.ctrl.resume();
+    s.ctrl.feedAudio(audio, 4);
+    CHECK(accepted == 2 && resets == 1);
+}
+
 static void testActorData() {
     struct Drone {
         int moves = 0;
@@ -361,6 +428,7 @@ int main() {
     testParsing();
     testVocabulary();
     testConsumedActors();
+    testListening();
     testActorData();
     testAudio();
 

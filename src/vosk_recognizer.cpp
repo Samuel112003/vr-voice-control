@@ -126,6 +126,11 @@ bool VoskRecognizer::finish() {
     return storeResult(vosk_recognizer_final_result(recognizer_));
 }
 
+void VoskRecognizer::reset() {
+    vosk_recognizer_reset(recognizer_);
+    result_.clear();
+}
+
 bool VoskRecognizer::storeResult(const char* json) {
     std::string text = json ? extractVoskText(json) : std::string();
     // Ne garde pas les phrases composées uniquement de "[unk]".

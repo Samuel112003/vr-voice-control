@@ -37,6 +37,7 @@ public:
     bool acceptAudio(const std::int16_t* samples, std::size_t count) override;
     std::string takeResult() override;
     bool finish() override;
+    void reset() override;
 
     float sampleRate() const { return sampleRate_; }
 

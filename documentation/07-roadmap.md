@@ -10,6 +10,7 @@
 - [x] Démo `drone_demo` (clavier / micro / WAV) et tests unitaires
 - [x] Ordres qui consomment des acteurs (types et nombre déclarés), ordre coupé par une pause mis en attente
 - [x] Correction : le dernier nom d'une liste d'acteurs consommés, suivi d'un ordre qu'il connaît, en devient le sujet (« … tire sur drone trois drone deux tire sur drone un »)
+- [x] Pause (bouton on/off, reprise non vocale) et veille (reprise par un terme de réveil)
 - [x] Correction : exécutables liés avec `-static` (plantage 0xc0000139 au démarrage, à cause des vieilles DLL du runtime MinGW livrées avec Vosk)
 
 ## À faire

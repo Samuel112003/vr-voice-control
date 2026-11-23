@@ -122,6 +122,30 @@ Vosk coupe les phrases aux pauses : « drone deux tire sur… *(pause)* … dron
 
 Un délai de 0 désactive l'attente : l'ordre incomplet est refusé tout de suite. Le refus d'un ordre abandonné est signalé à l'arrivée de la phrase suivante.
 
+## Pause et veille (bouton on/off)
+
+L'écoute a trois états :
+
+| État | Audio | Ordres | Pour en sortir |
+|---|---|---|---|
+| **Active** | reconnu | exécutés | — |
+| **Veille** (`softPause`) | reconnu | ignorés, sauf le **terme de réveil** | dire le terme de réveil, ou `resume()` |
+| **Pause** (`pause`) | jeté | ignorés, terme de réveil compris | `resume()` uniquement : action **non vocale** (bouton, touche) |
+
+- **Ce qui est fourni et ce qui est à déclarer.** La bibliothèque fournit le **mécanisme** (les trois états, la détection du terme de réveil, l'oubli de la phrase en cours, la sûreté entre threads). Elle n'impose **aucun mot ni aucune touche** : chaque projet déclare ses propres termes de mise en veille et de réveil, et branche ses propres boutons. « pause » peut avoir un autre sens dans un projet, ou le contexte peut rendre d'autres mots plus naturels (« repos » / « au travail »).
+
+  | Côté bibliothèque | Côté application |
+  |---|---|
+  | `pause()`, `softPause(terme)`, `resume()` | le terme de réveil et ses formes |
+  | états et `onListeningChanged` | le terme de mise en veille, et l'ordre global qui appelle `softPause` |
+  | détection du terme de réveil, suite de phrase exécutée | le bouton / la touche qui appelle `pause()`, `softPause()` ou `resume()` |
+  | oubli de la phrase en cours et de l'ordre en attente | l'affichage de l'état (voyant, icône…) |
+
+- Le **terme de réveil** est un terme comme un autre : il peut avoir plusieurs formes (« reprends », « reprise », « reprends l'écoute »). La plus longue l'emporte. Les mots qui le précèdent sont ignorés ; ceux qui le suivent sont exécutés normalement : « euh reprends drone un avance » réveille l'écoute et fait avancer drone 1.
+- Entrer en pause ou en veille **oublie la phrase en cours** (l'audio déjà reçu par le moteur) et **l'ordre en attente**. Les **acteurs visés sont conservés** : après la reprise, « avance » s'adresse au même acteur qu'avant.
+- La veille peut être déclenchée **à la voix**, par un ordre global dont l'action appelle `softPause` (« pause »). Les ordres qui suivent dans la même phrase ne sont pas exécutés : « pause drone un avance » met en veille sans faire avancer drone 1. Une action peut aussi appeler `pause()`, mais seule une action non vocale pourra alors reprendre.
+- `pause`, `softPause` et `resume` peuvent être appelés depuis **n'importe quel thread** (bouton de l'interface pendant que l'écoute tourne ailleurs).
+
 ## Grammaire du moteur
 
 Par défaut, Vosk peut reconnaître un très large vocabulaire, ce qui crée des confusions (« drone » / « drôle »). La bibliothèque fournit toutes les formes connues (`Vocabulary::phrases()`, des expressions comme « drone un ») pour **restreindre le moteur** à ce vocabulaire.

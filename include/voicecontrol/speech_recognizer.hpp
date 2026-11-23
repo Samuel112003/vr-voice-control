@@ -29,6 +29,10 @@ public:
     /// Fin du flux audio (fin de fichier, arrêt du micro) : force la fin de la
     /// phrase en cours. Retourne true si un résultat est disponible.
     virtual bool finish() { return false; }
+
+    /// Oublie la phrase en cours (audio déjà reçu, résultat non lu).
+    /// Appelé à la mise en pause.
+    virtual void reset() {}
 };
 
 } // namespace vc

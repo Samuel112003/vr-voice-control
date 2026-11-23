@@ -40,6 +40,11 @@ public:
     void setPendingTimeout(std::chrono::milliseconds timeout) { pendingTimeout_ = timeout; }
     std::chrono::milliseconds pendingTimeout() const { return pendingTimeout_; }
     bool hasPending() const { return !pending_.empty(); }
+    /// Abandonne l'ordre en attente, sans le signaler.
+    void cancelPending() {
+        pending_.clear();
+        pendingCandidates_.clear();
+    }
 
     /// Remplace l'horloge (tests).
     void setClock(std::function<Clock::time_point()> now) { now_ = std::move(now); }

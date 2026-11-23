@@ -61,3 +61,10 @@ Chaque décision : contexte, choix, conséquences. Ajouter les nouvelles décisi
 - **Fin de la liste des acteurs consommés** : sans ponctuation à l'oral, le dernier nom suivi d'un ordre que son type connaît est le sujet de cet ordre, pas un acteur consommé (« drone un tire sur drone trois drone deux tire sur drone un »).
 - **Ordre coupé par une pause** : mis en attente ; la phrase suivante le complète si elle commence par des noms, dans un délai réglable (5 s par défaut).
 - **Conséquences** : un ordre ne reçoit jamais un acteur d'un type qu'il ne sait pas traiter ; un nombre ou un type invalide est signalé par `onUnhandled` au lieu d'être exécuté. L'action reçoit désormais `Arguments` (termes choisis + acteurs consommés) au lieu de la seule liste de termes. Détails : [02-concepts.md](02-concepts.md).
+
+## D10 – Pause (non vocale) et veille (terme de réveil)
+
+- **Contexte** : il faut pouvoir couper le contrôle vocal (bouton on/off), et aussi le mettre en sommeil à la voix.
+- **Choix** : deux états en plus de l'écoute active. **Pause** : l'audio est jeté, seule une action non vocale (`resume()`) reprend. **Veille** : la reconnaissance continue, rien n'est exécuté jusqu'au terme de réveil, dont la suite de phrase est exécutée. Les deux oublient la phrase en cours et l'ordre en attente, mais conservent les acteurs visés.
+- **Mots et boutons non fournis** : la bibliothèque ne prédéfinit aucun mot de veille ou de réveil, ni aucune touche. Chaque projet les déclare (termes, ordre global qui appelle `softPause`, boutons qui appellent `pause` / `softPause` / `resume`), car « pause » peut avoir un autre sens selon le projet, ou d'autres mots être plus naturels dans son contexte. Une fonction toute faite avec des mots par défaut a été envisagée puis écartée pour cette raison.
+- **Conséquences** : en pause, le micro reste ouvert (reprise immédiate). Appelables depuis un autre thread (drapeaux atomiques, oubli appliqué par le thread de l'audio). Le terme de réveil doit être dans le vocabulaire pour que Vosk puisse l'entendre.

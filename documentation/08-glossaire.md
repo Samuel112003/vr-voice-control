@@ -18,6 +18,9 @@
 | **Acteurs visés** (cibles) | Acteurs nommés le plus récemment ; ils reçoivent les ordres suivants, même dans les phrases suivantes. |
 | **Sujet** | Acteur(s) à qui l'on parle et qui exécutent l'ordre ; ils deviennent les acteurs visés. Dans « drone un tire sur drone deux », le sujet est drone 1, drone 2 est un acteur consommé. |
 | **Repli** | Destinataire utilisé quand aucune cible ne connaît l'ordre : acteur d'un type unique, ou ordre global. |
+| **Pause** (`pause`) | État où l'audio est jeté et rien n'est exécuté ; seule une action non vocale (`resume`) reprend. |
+| **Veille** (`softPause`) | État où la reconnaissance continue mais rien n'est exécuté jusqu'au terme de réveil. |
+| **Terme de réveil** | Terme qui fait sortir de la veille (« reprends ») ; la suite de la phrase est exécutée. Choisi par chaque projet, comme le terme de mise en veille. |
 | **Commande** (`Command`) | Résultat de l'analyse : un ordre, les acteurs qui l'exécutent, ses arguments. |
 | **Rejet** (`Rejection`) | Ordre reconnu mais non exécuté : sans destinataire, ambigu, acteurs consommés manquants ou invalides. |
 | **Vocabulaire** (`Vocabulary`) | Ensemble des termes, types, acteurs et ordres définis par l'hôte. |

@@ -15,6 +15,10 @@
 //   « urgence », « coucou »             ordres globaux (sans acteur)
 //   « drone un tire sur drone deux char »     ordre qui consomme des acteurs (drones ou chars)
 //   « drone un tire sur » puis « drone deux » ordre coupé par une pause, complété ensuite
+//   « pause » puis « reprends »         veille : plus rien n'est exécuté jusqu'au mot de réveil
+//
+// Bouton on/off (touches, puis Entrée) : p = pause, v = veille, r = reprise
+// (au micro : à tout moment ; au clavier : /p, /v, /r).
 
 #include <voicecontrol/voicecontrol.hpp>
 
@@ -24,6 +28,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <thread>
 
 #ifdef _WIN32
 #include <windows.h>   // SetConsoleOutputCP : accents dans la console
@@ -133,6 +138,27 @@ int main(int argc, char** argv) {
     vc::VoiceController ctrl;
     declare(ctrl.vocabulary(), drones, camera);
 
+    // Veille à la voix : les mots sont propres à ce projet (« pause » endort, « reprends » réveille)
+    auto& wake = ctrl.vocabulary().term({"reprends", "reprise", "reprends l'écoute"});
+    auto& sleep = ctrl.vocabulary().term({"pause", "mets en pause"});
+    ctrl.vocabulary().order({sleep}, [&ctrl, &wake](const vc::Arguments&) { ctrl.softPause(wake); });
+
+    ctrl.onListeningChanged([](vc::ListeningState s) {
+        std::cout << (s == vc::ListeningState::Active       ? "  [ecoute active]"
+                      : s == vc::ListeningState::SoftPaused ? "  [veille : dites \"reprends\"]"
+                                                            : "  [pause : tapez r pour reprendre]")
+                  << std::endl;
+    });
+    // Bouton on/off simulé au clavier (propre à cette interface : chaque touche
+    // appelle une seule fonction de la bibliothèque) ; true si la ligne était une commande
+    auto button = [&ctrl, &wake](const std::string& key) {
+        if (key == "p") ctrl.pause();
+        else if (key == "v") ctrl.softPause(wake);
+        else if (key == "r") ctrl.resume();
+        else return false;
+        return true;
+    };
+
     ctrl.onTranscript([](const std::string& t) { std::cout << "Entendu : \"" << t << "\"" << std::endl; });
     ctrl.onUnhandled([](const vc::Rejection& r) {
         using Reason = vc::Rejection::Reason;
@@ -145,9 +171,10 @@ int main(int argc, char** argv) {
 
     try {
         if (keyboard) {
-            std::cout << "Entrez une phrase (ligne vide pour quitter) :\n";
+            std::cout << "Entrez une phrase (ligne vide pour quitter ; /p /v /r : pause, veille, reprise) :\n";
             std::string line;
-            while (std::cout << "> " && std::getline(std::cin, line) && !line.empty()) ctrl.handleText(line);
+            while (std::cout << "> " && std::getline(std::cin, line) && !line.empty())
+                if (line[0] != '/' || !button(line.substr(1))) ctrl.handleText(line);
             return 0;
         }
 #ifdef VC_WITH_VOSK
@@ -168,7 +195,11 @@ int main(int argc, char** argv) {
         } else {
             vc::Microphone mic(clip.sampleRate);
             std::signal(SIGINT, [](int) { g_stop = true; });
-            std::cout << "Parlez (Ctrl+C pour quitter)..." << std::endl;
+            // Le "bouton" tourne sur un autre thread que l'écoute (comme une interface).
+            std::thread([&button] {
+                for (std::string key; std::getline(std::cin, key);) button(key);
+            }).detach();
+            std::cout << "Parlez (Ctrl+C pour quitter ; p, v, r + Entree : pause, veille, reprise)..." << std::endl;
             ctrl.listen(mic, [] { return !g_stop; });
         }
 #endif

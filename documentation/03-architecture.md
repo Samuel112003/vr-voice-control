@@ -57,7 +57,7 @@ XR Boy Controle Vocal/
 
 ## Points d'attention
 
-- **Threads** : la reconnaissance Vosk est coûteuse ; elle devra tourner hors du thread de rendu. Les handlers devront alors être renvoyés sur le thread principal du moteur (file de commandes). Pas encore traité : aujourd'hui `feedAudio` exécute les handlers sur le thread appelant.
+- **Threads** : la reconnaissance Vosk est coûteuse ; elle devra tourner hors du thread de rendu. Les handlers devront alors être renvoyés sur le thread principal du moteur (file de commandes). Pas encore traité : aujourd'hui `feedAudio` exécute les handlers sur le thread appelant. Seuls `pause`, `softPause` et `resume` sont déjà sûrs depuis un autre thread : ils posent des drapeaux atomiques, et l'oubli de la phrase en cours (`ISpeechRecognizer::reset`, ordre en attente) est fait par le thread de l'audio au bloc suivant.
 - **Durée de vie** : les références `Term&` / `ActorType&` / `Actor&` / `Order&` restent valides tant que le `Vocabulary` existe (stockage par `unique_ptr`). Les objets reliés par `setData` appartiennent à l'hôte.
 - **État de l'analyse** : `CommandParser` mémorise entre deux phrases les acteurs visés (sans expiration : l'hôte peut appeler `clearTargets()`) et l'éventuel ordre en attente de ses acteurs consommés (expire après `pendingTimeout`, 5 s par défaut). L'horloge est remplaçable (`setClock`) pour les tests.
 - **Runtime MinGW et Vosk** : `libvosk.dll` est livrée avec des `libstdc++` / `libgcc` / `libwinpthread` plus anciens, copiés à côté des exécutables. Ceux du projet sont donc liés avec `-static` (fonction CMake `vc_copy_vosk_runtime`) ; sinon ils chargeraient ces vieilles DLL et planteraient au démarrage (0xc0000139, fonction introuvable).

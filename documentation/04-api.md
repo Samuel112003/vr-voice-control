@@ -143,7 +143,34 @@ ctrl.listen(mic, [&] { return !stop; });
 
 Dans Unity / Unreal, l'audio vient plutôt de l'API micro du moteur et passe par `feedAudio`.
 
-## 6. Ordres non exécutés
+## 6. Pause et veille
+
+La bibliothèque fournit le mécanisme ; **les mots et les boutons sont choisis par chaque projet** (rien n'est prédéfini : « pause » peut vouloir dire autre chose ailleurs). Exemple de branchement, comme dans la démo :
+
+```cpp
+// --- Mots propres au projet ---
+auto& reveil = vocab.term({"reprends", "reprise", "reprends l'écoute"});
+auto& veille = vocab.term({"pause", "mets en pause"});
+vocab.order({veille}, [&](const vc::Arguments&) { ctrl.softPause(reveil); });   // veille à la voix
+
+// --- Boutons propres à l'interface : un appel de la bibliothèque chacun ---
+boutonPause.onClick  = [&] { ctrl.pause(); };          // vraie pause : seule une action non vocale reprend
+boutonVeille.onClick = [&] { ctrl.softPause(reveil); }; // veille : reprise au terme de réveil
+boutonReprise.onClick = [&] { ctrl.resume(); };
+
+// --- État, pour l'affichage ---
+ctrl.listeningState();   // vc::ListeningState::Active, SoftPaused ou Paused
+ctrl.onListeningChanged([](vc::ListeningState s) { /* voyant de l'interface */ });
+```
+
+- Le terme de réveil doit être déclaré dans le vocabulaire (`vocab.term`) pour faire partie de la grammaire du moteur. Vérifier avec `VoskRecognizer::ignoredPhrases()` que le modèle connaît ses mots.
+- Pendant la pause, `feedAudio`, `finishAudio` et `handleText` ignorent tout ; `listen` continue de lire le micro (reprise immédiate) mais jette l'audio.
+- Ces méthodes sont sûres depuis un autre thread que l'audio. `onListeningChanged` est appelé sur le thread qui a provoqué le changement (celui du bouton, ou celui de l'audio pour le terme de réveil).
+- Un moteur de reconnaissance maison peut implémenter `ISpeechRecognizer::reset()` pour oublier la phrase en cours à la mise en pause.
+
+Règles : [02-concepts.md](02-concepts.md#pause-et-veille-bouton-onoff).
+
+## 7. Ordres non exécutés
 
 ```cpp
 ctrl.onUnhandled([](const vc::Rejection& r) {
