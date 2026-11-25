@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.16)
 project(VoiceControlVR
     VERSION 0.1.0
     DESCRIPTION "Bibliotheque de commande vocale (acteur.action) pour applications VR"
-    LANGUAGES CXX)
+    LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -11,6 +11,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(VC_BUILD_EXAMPLES "Construire les exemples" ON)
 option(VC_BUILD_TESTS    "Construire les tests"    ON)
+option(VC_BUILD_C_API    "Construire l'API C (DLL voicecontrol_c pour Unity)" ON)
 option(VC_WITH_VOSK      "Activer l'adaptateur Vosk (necessite Vosk dans third_party/vosk)" OFF)
 
 # ---------------------------------------------------------------------------
@@ -109,4 +110,8 @@ endif()
 if(VC_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
+endif()
+
+if(VC_BUILD_C_API)
+    add_subdirectory(bindings/c)
 endif()
