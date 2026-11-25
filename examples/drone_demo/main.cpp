@@ -16,6 +16,7 @@
 //   « drone un tire sur drone deux char »     ordre qui consomme des acteurs (drones ou chars)
 //   « drone un tire sur » puis « drone deux » ordre coupé par une pause, complété ensuite
 //   « pause » puis « reprends »         veille : plus rien n'est exécuté jusqu'au mot de réveil
+//   « drone un » puis « repos »         désélection (sinon automatique après 10 s sans ordre)
 //
 // Bouton on/off (touches, puis Entrée) : p = pause, v = veille, r = reprise
 // (au micro : à tout moment ; au clavier : /p, /v, /r).
@@ -29,6 +30,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>   // SetConsoleOutputCP : accents dans la console
@@ -142,6 +144,14 @@ int main(int argc, char** argv) {
     auto& wake = ctrl.vocabulary().term({"reprends", "reprise", "reprends l'écoute"});
     auto& sleep = ctrl.vocabulary().term({"pause", "mets en pause"});
     ctrl.vocabulary().order({sleep}, [&ctrl, &wake](const vc::Arguments&) { ctrl.softPause(wake); });
+
+    // Désélection à la voix (mot propre à ce projet) ; délai de sélection : défaut de la bibliothèque (10 s)
+    ctrl.vocabulary().order({ctrl.vocabulary().term({"repos"})}, ctrl.clearTargetsAction());
+    ctrl.onTargetsChanged([](const std::vector<const vc::Actor*>& targets) {
+        std::cout << "  [selection :";
+        for (const vc::Actor* a : targets) std::cout << " " << a->name();
+        std::cout << (targets.empty() ? " aucune]" : "]") << std::endl;
+    });
 
     ctrl.onListeningChanged([](vc::ListeningState s) {
         std::cout << (s == vc::ListeningState::Active       ? "  [ecoute active]"

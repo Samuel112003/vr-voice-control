@@ -50,10 +50,39 @@ public:
 
     void onUnhandled(UnhandledCallback callback) { unhandled_ = std::move(callback); }
 
+    // --- Acteurs visés (sélection) --------------------------------------------
+    // À appeler depuis le thread de l'audio, ou depuis une action.
+
     /// Acteurs visés : ils le restent d'une phrase à l'autre jusqu'à ce que
-    /// d'autres soient nommés, ou jusqu'à clearTargets().
+    /// d'autres soient nommés, jusqu'à clearTargets(), ou jusqu'à l'expiration
+    /// du délai de sélection.
     const std::vector<const Actor*>& targets() const { return parser_.targets(); }
-    void clearTargets() { parser_.clearTargets(); }
+
+    /// Désélectionne les acteurs visés (et abandonne l'ordre en attente).
+    void clearTargets();
+
+    /// Action prête à associer à un terme de l'application pour désélectionner
+    /// à la voix : vocab.order({repos}, ctrl.clearTargetsAction());
+    GlobalAction clearTargetsAction() {
+        return [this](const Arguments&) { clearTargets(); };
+    }
+
+    /// Délai de sélection (10 s par défaut) : sans ordre adressé aux acteurs
+    /// visés pendant ce délai, ils sont désélectionnés. vc::never : jamais.
+    /// Le temps passé en pause ou en veille ne compte pas.
+    void setTargetTimeout(std::chrono::milliseconds timeout) { parser_.setTargetTimeout(timeout); }
+    std::chrono::milliseconds targetTimeout() const { return parser_.targetTimeout(); }
+
+    /// Appelé quand les acteurs visés changent (nommés, désélectionnés, délai
+    /// écoulé), avec la nouvelle sélection (vide : plus personne).
+    void onTargetsChanged(std::function<void(const std::vector<const Actor*>&)> callback) {
+        targetsChanged_ = std::move(callback);
+    }
+
+    /// Applique le délai de sélection maintenant. feedAudio() et listen() le
+    /// font d'eux-mêmes ; à appeler régulièrement (ex : Update() d'Unity) si
+    /// l'application n'envoie pas d'audio en continu.
+    void update();
 
     /// Analyseur (réglage du délai d'attente des ordres incomplets, horloge de test...).
     CommandParser& parser() { return parser_; }
@@ -115,6 +144,11 @@ private:
     std::atomic<ListeningState> state_{ListeningState::Active};
     std::atomic<const Term*> wakeTerm_{nullptr};
     std::atomic<bool> resetRequested_{false};
+    std::atomic<bool> touchRequested_{false};   // sortie de pause : le délai de sélection repart
+
+    void notifyTargets();
+    std::vector<const Actor*> notifiedTargets_;
+    std::function<void(const std::vector<const Actor*>&)> targetsChanged_;
     std::function<void(ListeningState)> listeningChanged_;
 
     Vocabulary vocabulary_;

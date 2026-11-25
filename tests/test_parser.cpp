@@ -327,6 +327,92 @@ static void testListening() {
     CHECK(accepted == 2 && resets == 1);
 }
 
+static void testSelection() {
+    using namespace std::chrono_literals;
+    Scene s;
+    auto now = vc::CommandParser::Clock::time_point{};
+    s.ctrl.parser().setClock([&now] { return now; });
+    auto& v = s.ctrl.vocabulary();
+    v.order({v.term({"repos"})}, s.ctrl.clearTargetsAction());   // désélection à la voix, mot propre au projet
+
+    auto names = [](const std::vector<const vc::Actor*>& actors) {
+        std::string out;
+        for (const vc::Actor* a : actors) out += (out.empty() ? "" : "+") + a->name();
+        return out;
+    };
+    auto targets = [&] { return names(s.ctrl.targets()); };
+    std::vector<std::string> changes;   // sélections notifiées, "-" = plus personne
+    s.ctrl.onTargetsChanged([&](const std::vector<const vc::Actor*>& t) {
+        changes.push_back(t.empty() ? "-" : names(t));
+    });
+
+    CHECK(s.ctrl.targetTimeout() == 10s);
+
+    // Désélection à la voix
+    CHECK((s.say("drone un drone deux avancez") == Log{"drone 1:avance", "drone 2:avance"}));
+    CHECK(s.say("repos").empty() && targets().empty());
+    CHECK(s.say("recule").empty() && s.rejections.size() == 1);   // plus personne n'est visé
+    // L'ordre s'applique à sa place dans la phrase : après « repos », drone deux est visé
+    CHECK((s.say("drone un avance repos drone deux avance") == Log{"drone 1:avance", "drone 2:avance"}));
+    CHECK(targets() == "drone 2");
+    CHECK(s.say("drone trois repos").empty() && targets().empty());
+    CHECK((changes == std::vector<std::string>{"drone 1+drone 2", "-", "drone 2", "-"}));
+
+    // Désélection par le code : l'ordre en attente est abandonné avec la cible
+    s.say("drone un tire sur");
+    CHECK(s.ctrl.parser().hasPending());
+    s.ctrl.clearTargets();
+    CHECK(targets().empty() && !s.ctrl.parser().hasPending());
+
+    // Délai de sélection : 10 s sans ordre adressé aux cibles
+    s.say("drone un avance");
+    now += 9s;
+    CHECK((s.say("avance") == Log{"drone 1:avance"}));   // le délai repart à chaque ordre
+    now += 9s;
+    CHECK((s.say("recule") == Log{"drone 1:recule"}));
+    now += 11s;
+    CHECK(s.say("recule").empty() && targets().empty());   // délai écoulé : plus personne
+    CHECK(s.rejections.size() == 1 && s.rejections[0].reason == vc::Rejection::Reason::NoRecipient);
+    // Renommer les cibles fait aussi repartir le délai
+    s.say("drone deux");
+    now += 8s;
+    s.say("drone deux");
+    now += 8s;
+    CHECK((s.say("recule") == Log{"drone 2:recule"}));
+    // update() : expiration sans nouvelle phrase, notifiée
+    changes.clear();
+    now += 11s;
+    s.ctrl.update();
+    CHECK(targets().empty() && (changes == std::vector<std::string>{"-"}));
+
+    // Délai réglable, ou jamais
+    s.ctrl.setTargetTimeout(30s);
+    s.say("drone un");
+    now += 20s;
+    CHECK((s.say("recule") == Log{"drone 1:recule"}));
+    s.ctrl.setTargetTimeout(vc::never);
+    now += std::chrono::hours(24);
+    s.ctrl.update();
+    CHECK((s.say("recule") == Log{"drone 1:recule"}));
+
+    // Le temps passé en pause ne compte pas
+    s.ctrl.setTargetTimeout(10s);
+    s.say("drone deux");
+    s.ctrl.pause();
+    now += 60s;
+    s.ctrl.update();
+    s.ctrl.resume();
+    s.ctrl.update();
+    CHECK(targets() == "drone 2");
+    now += 11s;
+    s.ctrl.update();
+    CHECK(targets().empty());
+
+    // Les refus sont signalés à leur place dans la phrase, avant les ordres qui suivent
+    s.ctrl.onUnhandled([&](const vc::Rejection& r) { s.log.push_back("refus:" + r.words); });
+    CHECK((s.say("recule zoome") == Log{"refus:recule", "caméra:zoome"}));
+}
+
 static void testActorData() {
     struct Drone {
         int moves = 0;
@@ -429,6 +515,7 @@ int main() {
     testVocabulary();
     testConsumedActors();
     testListening();
+    testSelection();
     testActorData();
     testAudio();
 

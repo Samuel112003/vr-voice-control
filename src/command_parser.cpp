@@ -44,33 +44,50 @@ std::string join(const std::vector<std::string>& words, std::size_t from, std::s
 } // namespace
 
 std::vector<Command> CommandParser::parse(const std::string& text, std::vector<Rejection>* rejected) {
+    std::vector<Command> commands;
+    parse(
+        text,
+        [&commands](const Command& c) {
+            commands.push_back(c);
+            return true;
+        },
+        [rejected](const Rejection& r) {
+            if (rejected) rejected->push_back(r);
+        });
+    return commands;
+}
+
+void CommandParser::parse(const std::string& text, const CommandSink& onCommand, const RejectionSink& onRejection) {
+    Sinks sinks{onCommand, onRejection};
     auto words = tokenize(text);
+
+    // Délai de sélection dépassé : les acteurs visés (et l'ordre en attente) sont oubliés.
+    expireTargets();
 
     // Ordre en attente : complété si la phrase commence par des noms, sinon abandonné.
     if (!pending_.empty()) {
         bool alive = now() - pendingSince_ <= pendingTimeout_;
         if (alive && matchName(words, 0)) {
             words.insert(words.begin(), pending_.begin(), pending_.end());
-        } else if (rejected) {
-            rejected->push_back({Rejection::Reason::MissingActors, join(pending_, 0, pending_.size()),
-                                 pendingCandidates_});
+        } else if (onRejection) {
+            onRejection({Rejection::Reason::MissingActors, join(pending_, 0, pending_.size()), pendingCandidates_});
         }
         pending_.clear();
         pendingCandidates_.clear();
     }
 
-    std::vector<Command> commands;
     bool naming = false;   // vrai tant qu'on enchaîne des noms d'acteurs
     std::size_t pos = 0;
-    while (pos < words.size()) {
+    while (pos < words.size() && !sinks.stopped) {
         if (auto named = matchName(words, pos)) {
             if (!naming) targets_.clear();
             for (const Actor* a : named->actors) pushUnique(targets_, a);
+            lastTargetUse_ = now();
             naming = true;
             pos = named->end;
             continue;
         }
-        std::size_t end = matchOrder(words, pos, commands, rejected);
+        std::size_t end = matchOrder(words, pos, sinks);
         if (end == pos) {
             ++pos;   // mot inconnu : ignoré
             continue;
@@ -78,7 +95,13 @@ std::vector<Command> CommandParser::parse(const std::string& text, std::vector<R
         naming = false;
         pos = end;
     }
-    return commands;
+}
+
+bool CommandParser::expireTargets() {
+    if (targets_.empty() || targetTimeout_ == never) return false;
+    if (now() - lastTargetUse_ <= targetTimeout_) return false;
+    clearTargets();
+    return true;
 }
 
 std::optional<NamedActors> CommandParser::matchName(const std::vector<std::string>& words, std::size_t pos) const {
@@ -125,15 +148,14 @@ bool CommandParser::startsOrderFor(const std::vector<const Actor*>& actors, cons
     return false;
 }
 
-std::size_t CommandParser::matchOrder(const std::vector<std::string>& words, std::size_t pos,
-                                      std::vector<Command>& commands, std::vector<Rejection>* rejected) {
+std::size_t CommandParser::matchOrder(const std::vector<std::string>& words, std::size_t pos, Sinks& sinks) {
     const ActorReader reader = [this](const std::vector<std::string>& w, std::size_t p) { return readActors(w, p); };
 
     auto reject = [&](Rejection::Reason reason, const std::vector<const Order*>& candidates, std::size_t end) {
-        if (rejected) rejected->push_back({reason, join(words, pos, end), candidates});
+        if (sinks.rejection) sinks.rejection({reason, join(words, pos, end), candidates});
     };
 
-    // Exécute les correspondances Ok ; rejette les autres, ou met l'ordre en attente
+    // Transmet les correspondances Ok ; rejette les autres, ou met l'ordre en attente
     // s'il manque ses acteurs en fin de phrase.
     auto accept = [&](std::vector<Hit>& hits, bool fromTargets) {
         const std::size_t end = hits.front().match.end;
@@ -141,6 +163,9 @@ std::size_t CommandParser::matchOrder(const std::vector<std::string>& words, std
                                        [](const Hit& h) { return h.match.status == Order::Match::Status::Ok; });
         const bool canWait = !anyOk && end == words.size() && pendingTimeout_.count() > 0;
         std::vector<const Order*> waiting;
+        // Les ordres sont tous construits avant d'être transmis : une action qui
+        // désélectionne ne doit pas vider les acteurs des ordres de la même position.
+        std::vector<Command> ready;
         for (Hit& h : hits) {
             switch (h.match.status) {
             case Order::Match::Status::Ok: {
@@ -151,7 +176,7 @@ std::size_t CommandParser::matchOrder(const std::vector<std::string>& words, std
                 } else if (h.order->owner()) {
                     c.actors = h.order->owner()->actors();
                 }
-                commands.push_back(std::move(c));
+                ready.push_back(std::move(c));
                 break;
             }
             case Order::Match::Status::InvalidActors:
@@ -167,6 +192,11 @@ std::size_t CommandParser::matchOrder(const std::vector<std::string>& words, std
             pending_.assign(words.begin() + static_cast<std::ptrdiff_t>(pos), words.begin() + static_cast<std::ptrdiff_t>(end));
             pendingCandidates_ = std::move(waiting);
             pendingSince_ = now();
+        }
+        if (fromTargets && !ready.empty()) lastTargetUse_ = now();   // on vient de parler aux cibles
+        for (const Command& c : ready) {
+            if (sinks.stopped) break;
+            if (!sinks.command(c)) sinks.stopped = true;
         }
         return end;
     };

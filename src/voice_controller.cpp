@@ -24,6 +24,7 @@ std::vector<Command> VoiceController::handleText(const std::string& text) {
                     resumeAt = std::max(resumeAt, pos + form.size());
         if (!resumeAt) return {};
         setState(ListeningState::Active);
+        applyReset();   // le délai de sélection repart avant d'analyser la suite
         toParse.clear();
         for (std::size_t i = resumeAt; i < words.size(); ++i) toParse += (i > resumeAt ? " " : "") + words[i];
         break;
@@ -32,18 +33,40 @@ std::vector<Command> VoiceController::handleText(const std::string& text) {
         break;
     }
 
-    std::vector<Rejection> rejected;
-    auto commands = parser_.parse(toParse, &rejected);
+    // Chaque ordre est exécuté dès qu'il est reconnu : une action qui désélectionne
+    // ou met en pause s'applique à la suite de la phrase.
     std::vector<Command> executed;
-    for (auto& c : commands) {
-        // Une action peut mettre en pause ("pause drone un avance") : la suite n'est pas exécutée.
-        if (state_.load() != ListeningState::Active) break;
-        dispatch(c);
-        executed.push_back(std::move(c));
-    }
-    if (unhandled_ && state_.load() == ListeningState::Active)
-        for (const auto& r : rejected) unhandled_(r);
+    parser_.parse(
+        toParse,
+        [this, &executed](const Command& c) {
+            if (state_.load() != ListeningState::Active) return false;
+            dispatch(c);
+            executed.push_back(c);
+            // "pause drone un avance" : la suite n'est pas exécutée.
+            return state_.load() == ListeningState::Active;
+        },
+        [this](const Rejection& r) {
+            if (unhandled_ && state_.load() == ListeningState::Active) unhandled_(r);
+        });
+    notifyTargets();
     return executed;
+}
+
+void VoiceController::clearTargets() {
+    parser_.clearTargets();
+    notifyTargets();
+}
+
+void VoiceController::update() {
+    applyReset();
+    if (state_.load() != ListeningState::Active) return;   // le délai ne court pas en pause / veille
+    if (parser_.expireTargets()) notifyTargets();
+}
+
+void VoiceController::notifyTargets() {
+    if (parser_.targets() == notifiedTargets_) return;
+    notifiedTargets_ = parser_.targets();
+    if (targetsChanged_) targetsChanged_(notifiedTargets_);
 }
 
 void VoiceController::pause() {
@@ -60,10 +83,17 @@ void VoiceController::softPause(const Term& wakeTerm) {
 void VoiceController::resume() { setState(ListeningState::Active); }
 
 void VoiceController::setState(ListeningState state) {
-    if (state_.exchange(state) != state && listeningChanged_) listeningChanged_(state);
+    const ListeningState previous = state_.exchange(state);
+    if (previous == state) return;
+    // Sortie de pause / veille : le temps passé ne compte pas dans le délai de
+    // sélection. Appliqué par le thread de l'audio (applyReset), car setState
+    // peut venir du thread d'un bouton.
+    if (state == ListeningState::Active) touchRequested_ = true;
+    if (listeningChanged_) listeningChanged_(state);
 }
 
 void VoiceController::applyReset() {
+    if (touchRequested_.exchange(false)) parser_.touchTargets();
     if (!resetRequested_.exchange(false)) return;
     if (recognizer_) recognizer_->reset();
     parser_.cancelPending();
@@ -88,7 +118,7 @@ void VoiceController::refreshGrammar() {
 }
 
 std::vector<Command> VoiceController::feedAudio(const std::int16_t* samples, std::size_t count) {
-    applyReset();
+    update();   // oubli demandé par pause(), délai de sélection
     if (state_.load() == ListeningState::Paused) return {};   // audio jeté
     if (!recognizer_ || !recognizer_->acceptAudio(samples, count)) return {};
     return handleRecognized();
@@ -118,6 +148,7 @@ void VoiceController::listen(Microphone& microphone, const std::function<bool()>
     std::vector<std::int16_t> block;
     while (keepListening()) {
         if (microphone.read(block)) feedAudio(block.data(), block.size());
+        else update();   // pas d'audio : le délai de sélection court quand même
     }
     finishAudio();
 }
