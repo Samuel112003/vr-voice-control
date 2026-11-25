@@ -24,3 +24,14 @@ vc_controller* vc_create(void) {
 void vc_destroy(vc_controller* controller) {
     delete controller;
 }
+
+int vc_handle_text(vc_controller* controller, const char* text) {
+    if (controller == nullptr || text == nullptr) {
+        return -1;
+    }
+    try {
+        return static_cast<int>(controller->controller.handleText(text).size());
+    } catch (...) {
+        return -1;
+    }
+}

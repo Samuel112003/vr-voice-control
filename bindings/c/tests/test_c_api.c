@@ -21,6 +21,11 @@ int main(void) {
 
     controller = vc_create();
     CHECK(controller != NULL);
+
+    CHECK(vc_handle_text(NULL, "cube avance") == -1);       /* NULL controller rejected */
+    CHECK(vc_handle_text(controller, NULL) == -1);          /* NULL text rejected */
+    CHECK(vc_handle_text(controller, "cube avance") == 0);  /* empty vocabulary executes nothing */
+
     vc_destroy(controller);
 
     vc_destroy(NULL); /* must be accepted */

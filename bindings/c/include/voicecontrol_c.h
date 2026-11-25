@@ -31,6 +31,10 @@ extern "C" {
     /* Destroys a controller created by vc_create. NULL is accepted. */
     VC_C_API void vc_destroy(vc_controller* controller);
 
+    /* Parses a UTF-8 sentence and executes the orders found.
+    Returns the number of executed orders, or -1 on error. */
+    VC_C_API int vc_handle_text(vc_controller* controller, const char* text);
+
 #ifdef __cplusplus
 }
 #endif
