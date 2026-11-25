@@ -18,3 +18,10 @@ cmake --build build
 ```
 
 Documentation complète : [documentation/](documentation/README.md)
+
+## Contribuer
+
+- Partir de la branche `dev` ; une branche par évolution (`feat/…`) ou correction (`fix/…`).
+- Sur sa branche, **ne pas modifier `documentation/`** : noter les changements dans le [logbook](logbook/README.md), reportés dans la doc sur `dev`.
+- Avant de fusionner vers `dev` : compilation sans avertissement et tous les tests passent.
+- Conventions détaillées : [CLAUDE.md](CLAUDE.md).

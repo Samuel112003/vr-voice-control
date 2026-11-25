@@ -45,7 +45,9 @@ XR Boy Controle Vocal/
 ├── tests/                  tests unitaires (ctest)
 ├── third_party/            dépendances externes (Vosk, non versionné)
 ├── models/                 modèle Vosk (non versionné)
-└── documentation/          cette documentation
+├── documentation/          cette documentation (décisions dans documentation/decisions/)
+├── logbook/                notes de doc des branches, en attente de réconciliation
+└── CLAUDE.md               conventions et règles du projet (aussi lues par les assistants)
 ```
 
 ## Principes de conception

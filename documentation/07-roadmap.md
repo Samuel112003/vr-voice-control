@@ -15,6 +15,7 @@
 
 ## À faire
 
+- [ ] Limiter les conflits de code entre branches : un fichier de test par fonctionnalité (au lieu de `tests/test_parser.cpp`), un fichier par classe (au lieu de `src/vocabulary.cpp` / `vocabulary.hpp`), formatage automatique (`.clang-format`), vérification automatique de la compilation et des tests sur GitHub
 - [ ] Gestion des threads : reconnaissance en tâche de fond, actions sur le thread principal
 - [ ] Couche C (`extern "C"`) pour Unity
 - [ ] Bibliothèque dynamique + build Android arm64

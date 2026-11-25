@@ -11,9 +11,13 @@ Bibliothèque C++ de **commande vocale pour applications VR** : elle reconnaît,
 | [03-architecture.md](03-architecture.md) | Modules, flux de données audio → texte → commandes → handlers |
 | [04-api.md](04-api.md) | Utilisation de l'API C++ avec exemples |
 | [05-build-et-integration.md](05-build-et-integration.md) | Compilation, Vosk, intégration Unity / Unreal / casques autonomes |
-| [06-decisions.md](06-decisions.md) | Journal des décisions techniques (pourquoi C++, pourquoi Vosk…) |
+| [06-decisions.md](06-decisions.md) | Index des décisions techniques (pourquoi C++, pourquoi Vosk…), une par fichier dans [decisions/](decisions/) |
 | [07-roadmap.md](07-roadmap.md) | État d'avancement, prochaines étapes, questions ouvertes |
 | [08-glossaire.md](08-glossaire.md) | Vocabulaire du projet |
+
+## Faire évoluer cette documentation
+
+Cette documentation décrit le projet **tel qu'il est sur `dev`**. Elle ne se modifie que sur la branche `dev` : sur une branche de travail (`feat/…`, `fix/…`), on écrit à la place une entrée dans le [logbook](../logbook/README.md), reportée ici lors de la réconciliation suivante. Cela évite que deux branches entrent en conflit sur les mêmes fichiers de doc. Conventions générales du projet : [CLAUDE.md](../CLAUDE.md).
 
 ## En une phrase
 
